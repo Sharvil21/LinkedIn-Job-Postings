@@ -5,5 +5,7 @@ other by Sharvil. The code in each of these documents can be run by selecting
 the "run all" or "run code block" for each individual block, after the paths to
 the files in question have been updated.
 
+All Predictive Models created using R Programming Language. Data Cleaning was done using Microsoft Excels
+
 Dataset acquired from Kaggle:
 https://www.kaggle.com/datasets/rajatraj0502/linkedin-job-2023
