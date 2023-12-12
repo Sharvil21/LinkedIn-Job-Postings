@@ -1,0 +1,246 @@
+---
+title: "Milestone-2-rye"
+author: "Erik Rye"
+date: "2023-10-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caTools)
+library(dplyr)
+```
+
+## Milestone 2 
+
+### Linear Regressions
+
+### Question 1: Can we predict the number of applicants a job post will receive given the number of views that it receives?
+
+```{r}
+
+# Set current working directory to where my data is
+setwd('/home/erik/repos/gigaryte/INST737-Team-8/')
+# read the main CSV into a dataframe
+df <- read.csv('job_postings.csv', header=TRUE)
+
+applications <- data.frame(views = df$views, applies = df$applies)
+applications <- na.omit(applications)
+
+# Seed the test/train sample so we have repeatable results
+set.seed(0)
+
+# Do a 70/30 training/testing split
+sample <- sample.split(applications$views, SplitRatio = 0.7)
+train  <- subset(applications, sample == TRUE)
+test   <- subset(applications, sample == FALSE)
+
+# Plot the training data
+plot(train$views, train$applies, 
+     xlab = "Number of Views", 
+     ylab = "Number of Applications", 
+     pch=16,
+     main = "Training Data w/Linear Regression") 
+
+# Linear regression model for predicting applies based on views trained on training data
+applies.lm <- lm(applies~views, data = train)
+applies.lm
+
+# Plot the linear regression on same axes
+abline(applies.lm, col="red", lwd=3)
+
+# Create a function to run on test data
+view.fit <- function(x) applies.lm$coefficients[1] + applies.lm$coefficients[2] * x
+
+# Add the fit and residuals to the dataframe
+train <- data.frame(train, fit = fitted(applies.lm), resid= resid(applies.lm))
+
+# Plot the Q-Q plot
+qqnorm(resid(applies.lm))
+qqline(resid(applies.lm))
+
+########## Predictions and compare with test data ##########
+
+# Predict the number of applications given the number of views from our test data
+# using our linear regression model
+prediction.frame <- data.frame(views = test$views)
+pc <- predict(applies.lm, int='c', newdata = prediction.frame)
+pp <- predict(applies.lm, int='p', newdata = prediction.frame)
+plot(train$views, train$applies, 
+     xlab = "Number of Views", 
+     ylab = "Number of Applications", 
+     main = "Test Data with Prediction and Confidence Bands",
+     pch=16)
+matlines(prediction.frame, pc)
+matlines(prediction.frame, pp)
+
+# Get the predictions for the number of applications based on the number
+# of views in our test set
+applies_prediction <- predict(applies.lm, newdata=prediction.frame)
+
+# See how well it correlates with the actual test applications
+cor(applies_prediction, test$applies)
+
+# Calculate residuals of test data 
+test_residuals <- test$applies - applies_prediction
+mse <- mean(test_residuals^2)
+mse
+
+```
+
+##  Can we predict the number of applicants based on the job's salary information, including both salary range and whether the salary is listed vs unlisted?
+
+```{r}
+# Set current working directory to where my data is
+setwd('/home/erik/repos/gigaryte/INST737-Team-8/')
+# read the main CSV into a dataframe
+df <- read.csv('job_postings.csv', header=TRUE)
+
+  applications <- data.frame(applies = df$applies, salary = df$salary)
+applications <- na.omit(applications)
+
+# Seed the test/train sample so we have repeatable results
+set.seed(0)
+
+# Do a 70/30 training/testing split
+sample <- sample.split(applications$views, SplitRatio = 0.7)
+train  <- subset(applications, sample == TRUE)
+test   <- subset(applications, sample == FALSE)
+
+# Plot the training data
+plot(train$views, train$applies, 
+     xlab = "Number of Views", 
+     ylab = "Number of Applications", 
+     pch=16,
+     main = "Training Data w/Linear Regression") 
+
+# Linear regression model for predicting applies based on views trained on training data
+applies.lm <- lm(applies~views, data = train)
+applies.lm
+
+# Plot the linear regression on same axes
+abline(applies.lm, col="red", lwd=3)
+
+# Create a function to run on test data
+view.fit <- function(x) applies.lm$coefficients[1] + applies.lm$coefficients[2] * x
+
+# Add the fit and residuals to the dataframe
+train <- data.frame(train, fit = fitted(applies.lm), resid= resid(applies.lm))
+
+# Plot the Q-Q plot
+qqnorm(resid(applies.lm))
+qqline(resid(applies.lm))
+
+########## Predictions and compare with test data ##########
+
+# Predict the number of applications given the number of views from our test data
+# using our linear regression model
+prediction.frame <- data.frame(views = test$views)
+pc <- predict(applies.lm, int='c', newdata = prediction.frame)
+pp <- predict(applies.lm, int='p', newdata = prediction.frame)
+plot(train$views, train$applies, 
+     xlab = "Number of Views", 
+     ylab = "Number of Applications", 
+     main = "Test Data with Prediction and Confidence Bands",
+     pch=16)
+matlines(prediction.frame, pc)
+matlines(prediction.frame, pp)
+
+# Get the predictions for the number of applications based on the number
+# of views in our test set
+applies_prediction <- predict(applies.lm, newdata=prediction.frame)
+applies_residuals <- resid(applies.lm, newdata=)
+
+# See how well it correlates with the actual test applications
+cor(applies_prediction, test$applies)
+
+# Calculate residuals of test data 
+test_residuals <- test$applies - applies_prediction
+mse <- mean(test_residuals^2)
+mse
+```
+
+###  Can we predict a job's salary based on the industry the job is from and where the job is located?
+
+```{r}
+
+```
+
+
+###  Can we predict the number of views a job advertisement will receive based on the size of the company posting the ad?
+
+```{r}
+# Set current working directory to where my data is
+setwd('/home/erik/repos/gigaryte/INST737-Team-8/')
+# read the main CSV into a dataframe
+df <- read.csv('job_postings.csv', header=TRUE)
+
+employee_info <- read.csv('company_details/employee_counts_clean.csv', header=TRUE)
+
+df <- merge(df, employee_info, by.x = "company_id", by.y = "company_id", all.x = FALSE)
+
+views <- data.frame(views = df$views, employees = df$employee_count)
+views <- na.omit(views)
+
+# Seed the test/train sample so we have repeatable results
+set.seed(0)
+
+# Do a 70/30 training/testing split
+sample <- sample.split(views$views, SplitRatio = 0.7)
+train  <- subset(views, sample == TRUE)
+test   <- subset(views, sample == FALSE)
+
+# Plot the training data
+plot(train$employees, train$views, 
+     xlab = "Number of Employees", 
+     ylab = "Number of Views", 
+     pch=16,
+     main = "Training Data w/Linear Regression") 
+
+# Linear regression model for predicting applies based on views trained on training data
+views.lm <- lm(views~employees, data = train)
+views.lm
+
+# Plot the linear regression on same axes
+abline(views.lm, col="red", lwd=3)
+
+# Create a function to run on test data
+view.fit <- function(x) views.lm$coefficients[1] + views.lm$coefficients[2] * x
+
+# Add the fit and residuals to the dataframe
+train <- data.frame(train, fit = fitted(views.lm), resid= resid(views.lm))
+
+# Plot the Q-Q plot
+qqnorm(resid(views.lm))
+qqline(resid(views.lm))
+
+########## Predictions and compare with test data ##########
+
+# Predict the number of views given the number of employees from our test data
+# using our linear regression model
+prediction.frame <- data.frame(views = test$views, employees = test$employees)
+pc <- predict(views.lm, int='c', newdata = prediction.frame)
+pp <- predict(views.lm, int='p', newdata = prediction.frame)
+plot(train$employees, train$views, 
+     xlab = "Number of Employees", 
+     ylab = "Number of Views", 
+     main = "Test Data with Prediction and Confidence Bands",
+     pch=16)
+matlines(prediction.frame, pc)
+matlines(prediction.frame, pp)
+
+# Get the predictions for the number of views based on the number
+# of employees in our test set
+views_prediction <- predict(views.lm, newdata=prediction.frame)
+
+# See how well it correlates with the actual test views
+cor(views_prediction, test$views)
+
+# Calculate residuals of test data 
+test_residuals <- test$views - views_prediction
+mse <- mean(test_residuals^2)
+mse
+```
+
+
+

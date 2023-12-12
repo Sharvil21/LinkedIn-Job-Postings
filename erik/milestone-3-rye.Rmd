@@ -1,0 +1,246 @@
+---
+title: "INST737 Milestone 3"
+author: "Erik Rye"
+date: "2023-11-17"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+library(fpc)
+library(dbscan)
+library(NbClust)
+library(factoextra)
+library(caret)
+
+knitr::opts_knit$set(root.dir = '/home/erik/repos/gigaryte/INST737-Team-8/')
+```
+
+## k-means clustering
+
+```{r}
+# Read in the data
+jobs <- read.csv('job_postings.csv', header=TRUE)
+employees <- read.csv('company_details/employee_counts_clean.csv', header=TRUE)
+
+# Combine the two csvs on company_id
+job_employees <- merge(jobs, employees, by.x = "company_id", by.y = "company_id", all.x = TRUE)
+
+# Create a dataframe out of just the dependent variables
+data <- data.frame(views=job_employees$views, 
+                   salary=job_employees$clean_salary, 
+                   applies=job_employees$applies, 
+                   employees=job_employees$employee_count, 
+                   followers=job_employees$follower_count)
+
+# Normalize the data and remove any NA values
+df <- scale(data)
+df <- na.omit(df)
+
+# Figure out how many clusters is best
+fviz_nbclust(df, kmeans,method="wss")
+
+# Compute the 2-means clusters, plot
+k2 <- kmeans(df, centers=2, nstart=100)
+str(k2)
+fviz_cluster(k2, data=df)
+cluster_centers <- k2$centers
+
+```
+
+## density-based clustering
+
+```{r}
+# Read in the data
+jobs <- read.csv('job_postings.csv', header=TRUE)
+employees <- read.csv('company_details/employee_counts_clean.csv', header=TRUE)
+
+# Combine the two csvs on company_id
+job_employees <- merge(jobs, employees, by.x = "company_id", by.y = "company_id", all.x = TRUE)
+
+# Create a dataframe out of just the dependent variables
+data <- data.frame(views=job_employees$views, 
+                   salary=job_employees$clean_salary, 
+                   applies=job_employees$applies, 
+                   employees=job_employees$employee_count, 
+                   followers=job_employees$follower_count)
+
+# Normalize the data and remove any NA values
+df <- scale(data)
+df <- na.omit(df)
+
+# Figure out optimal epsilon value
+dbscan::kNNdistplot(df, k=10)
+
+# Generaate the outliers and clusters using k=10
+db <- fpc::dbscan(df, eps=1.5, MinPts=10)
+fviz_cluster(db, data=df, geom = "point", geom.params = list(show.legend = FALSE))
+
+
+```
+
+### Hierarchical clustering
+
+```{r}
+
+# Read in the data
+jobs <- read.csv('job_postings.csv', header=TRUE)
+employees <- read.csv('company_details/employee_counts_clean.csv', header=TRUE)
+
+# Combine the two csvs on company_id
+job_employees <- merge(jobs, employees, by.x = "company_id", by.y = "company_id", all.x = TRUE)
+
+# Create a dataframe out of just the dependent variables
+data <- data.frame(views=job_employees$views, 
+                   salary=job_employees$clean_salary, 
+                   applies=job_employees$applies, 
+                   employees=job_employees$employee_count, 
+                   followers=job_employees$follower_count)
+
+# Normalize the data and remove any NA values
+df <- scale(data)
+df <- na.omit(df)
+
+# Perform hierarchical clustering
+hc <- hclust(dist(df, method="euclidean"))
+
+# Plot the dendrogram
+plot(hc, cex = 0.6)
+
+# Trim the dendrogram into k clusters
+clusters <- cutree(hc, k = 2)
+
+# Visualize the results with fviz_cluster
+fviz_cluster(list(data = df, cluster = clusters), geom = "point", stand = FALSE, main = "Hierarchical Clustering")
+aggregate(df, by=list(cluster=clusters), mean)
+
+
+```
+
+
+### Question 4 Comparative Analysis with CARET
+
+This tests the performance of the three models using a 10-fold, 3-repeated 
+repeated cross-fold validation
+
+```{r}
+
+
+# Read in the data
+jobs <- read.csv('job_postings.csv', header=TRUE)
+employees <- read.csv('company_details/employee_counts_clean.csv', header=TRUE)
+
+# Combine the two csvs on company_id
+job_employees <- merge(jobs, employees, by.x = "company_id", by.y = "company_id", all.x = TRUE)
+
+# Create a dataframe out of just the dependent variables
+data <- data.frame(views=job_employees$views, 
+                   salary=job_employees$class_salary, 
+                   applies=job_employees$applies, 
+                   employees=job_employees$employee_count, 
+                   followers=job_employees$follower_count)
+
+#  remove any NA values
+df <- na.omit(data)
+
+#control set
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+
+# Train the models to predict high/med/low applicants
+modelNN <- train(salary~., data=df, method="nnet", trControl=control, verbose=FALSE)
+modelRF <- train(salary~., data=df, method="rf", trControl=control, verbose=FALSE)
+modelSVM <- train(salary~., data=df, method="svmRadial", trControl=control, verbose=FALSE)
+
+# 
+results <- resamples(list(NN=modelNN, RF=modelRF, SVM=modelSVM))
+summary(results)
+bwplot(results)
+
+```
+
+#### Normal CV
+
+This tests the performance of the three models using a 10-fold, cross-fold 
+validation (no repeats)
+
+```{r}
+
+
+
+# Read in the data
+jobs <- read.csv('job_postings.csv', header=TRUE)
+employees <- read.csv('company_details/employee_counts_clean.csv', header=TRUE)
+
+# Combine the two csvs on company_id
+job_employees <- merge(jobs, employees, by.x = "company_id", by.y = "company_id", all.x = TRUE)
+
+# Create a dataframe out of just the dependent variables
+data <- data.frame(views=job_employees$views, 
+                   salary=job_employees$class_salary, 
+                   applies=job_employees$applies, 
+                   employees=job_employees$employee_count, 
+                   followers=job_employees$follower_count)
+
+#  remove any NA values
+df <- na.omit(data)
+
+#control set
+control <- trainControl(method="cv", number=10)
+
+# Train the models to predict high/med/low applicants
+modelNN <- train(salary~., data=df, method="nnet", trControl=control)
+modelRF <- train(salary~., data=df, method="rf", trControl=control, verbose=FALSE)
+modelSVM <- train(salary~., data=df, method="svmRadial", trControl=control, verbose=FALSE)
+
+# 
+results <- resamples(list(NN=modelNN, RF=modelRF, SVM=modelSVM))
+summary(results)
+bwplot(results)
+
+```
+
+
+#### Bootstrap
+
+This tests the performance of the three models using a the bootstrap sampling
+method
+
+```{r}
+
+
+# Read in the data
+jobs <- read.csv('job_postings.csv', header=TRUE)
+employees <- read.csv('company_details/employee_counts_clean.csv', header=TRUE)
+
+# Combine the two csvs on company_id
+job_employees <- merge(jobs, employees, by.x = "company_id", by.y = "company_id", all.x = TRUE)
+
+# Create a dataframe out of just the dependent variables
+data <- data.frame(views=job_employees$views, 
+                   salary=job_employees$class_salary, 
+                   applies=job_employees$applies, 
+                   employees=job_employees$employee_count, 
+                   followers=job_employees$follower_count)
+
+#  remove any NA values
+df <- na.omit(data)
+
+#control set
+control <- trainControl(method="boot" , number=10)
+
+
+# Train the models to predict high/med/low applicants
+modelNN <- train(salary~., data=df, method="nnet", trControl=control)
+modelRF <- train(salary~., data=df, method="rf", trControl=control, verbose=FALSE)
+modelSVM <- train(salary~., data=df, method="svmRadial", trControl=control, verbose=FALSE)
+
+# 
+results <- resamples(list(NN=modelNN, RF=modelRF, SVM=modelSVM))
+summary(results)
+bwplot(results)
+
+
+```
+

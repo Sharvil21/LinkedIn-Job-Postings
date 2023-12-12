@@ -1,0 +1,357 @@
+---
+title: "milestone-2-DF"
+author: "Erik Rye"
+date: "2023-10-18"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/home/erik/repos/gigaryte/INST737-Team-8/')
+
+library(caTools)
+library(dplyr)
+library(ggplot2)
+library(C50)
+library(gmodels)
+library(randomForest)
+library(ISLR)
+
+```
+
+## Milestone 2 Question 3
+
+### Part a
+`3a. [2pts]. Split your dataset into training and testing sets assuming that samples are not randomly ordered (Hint: generate random numbers). Show that the distribution after the split is similar to the original.`
+
+```{r}
+
+# read the main CSV into a dataframe
+jobs <- read.csv('job_postings.csv', header=TRUE)
+
+# Seed the test/train sample so we have repeatable results
+set.seed(1)
+
+# Could do this to get training/testing split
+# Randomly permute the rows of jobs
+# jobs_rand <- jobs[order(runif(nrow(jobs))),]
+# index [:N] for training, [N:] for test, where N is training prob * n of rows
+
+# I think this is more clear
+sample <- sample.split(jobs$job_id, SplitRatio = 0.7)
+train  <- subset(jobs, sample == TRUE)
+test   <- subset(jobs, sample == FALSE)
+
+# Next, show that a couple of distributions look similar before & after 
+
+############## Applicant distribution ########################
+
+# Distribution of # of applicants in whole dataset
+summary(jobs$applies)
+ggplot(jobs, aes(x=applies)) +
+  geom_histogram(binwidth = 50) +
+  labs(title="Applicant Histogram (Entire Dataset)", x="Applicants", y="Frequency") +
+    scale_x_continuous(labels = scales::number_format(accuracy = 1)) + 
+  theme_minimal()
+
+# Distribution of # of applicants in training data
+summary(train$applies)
+ggplot(train, aes(x=applies)) +
+  geom_histogram(binwidth = 50) +
+  labs(title="Applicant Histogram (Training Data)", x="Applicants", y="Frequency") +
+    scale_x_continuous(labels = scales::number_format(accuracy = 1)) + 
+  theme_minimal()
+
+# Distribution of # of applicants in test data
+summary(test$applies)
+ggplot(test, aes(x=applies)) +
+  geom_histogram(binwidth = 50) +
+  labs(title="Applicant Histogram (Test Data)", x="Applicants", y="Frequency") +
+    scale_x_continuous(labels = scales::number_format(accuracy = 1)) + 
+  theme_minimal()
+
+############## Salary distribution ########################
+
+# Distribution of cleaned salaries in whole dataset
+summary(jobs$clean_salary)
+ggplot(jobs, aes(x=clean_salary)) +
+  geom_histogram(binwidth = 50000) +
+  labs(title="Salary Histogram (Entire Dataset)", x="Salary", y="Frequency") +
+    scale_x_continuous(labels = scales::number_format(accuracy = 1)) + 
+  theme_minimal()
+
+# Distribution of # of cleaned salaries in training data
+summary(train$clean_salary)
+ggplot(train, aes(x=clean_salary)) +
+  geom_histogram(binwidth = 50000) +
+  labs(title="Salary Histogram (Training Data)", x="Salary", y="Frequency") +
+  scale_x_continuous(labels = scales::number_format(accuracy = 1)) + 
+  theme_minimal()
+
+# Distribution of # of cleaned salaries in test data
+summary(test$clean_salary)
+ggplot(test, aes(x=clean_salary)) +
+  geom_histogram(binwidth = 50000) +
+  labs(title="Salary Histogram (Test Data)", x="Salary", y="Frequency") +
+  scale_x_continuous(labels = scales::number_format(accuracy = 1)) + 
+  theme_minimal()
+
+
+############## Views distribution ########################
+
+# Distribution of views in whole dataset
+summary(jobs$views)
+ggplot(jobs, aes(x=views)) +
+  geom_histogram(binwidth = 50) +
+  labs(title="Views Histogram (Entire Dataset)", x="Views", y="Frequency") +
+    scale_x_continuous(labels = scales::number_format(accuracy = 1)) + 
+  theme_minimal()
+
+# Distribution of # of views in training data
+summary(train$views)
+ggplot(train, aes(x=views)) +
+  geom_histogram(binwidth = 50) +
+  labs(title="Views Histogram (Training Data)", x="Views", y="Frequency") +
+  scale_x_continuous(labels = scales::number_format(accuracy = 1)) + 
+  theme_minimal()
+
+# Distribution of # of views in test data
+summary(test$views)
+ggplot(test, aes(x=views)) +
+  geom_histogram(binwidth = 50) +
+  labs(title="Views Histogram (Test Data)", x="Views", y="Frequency") +
+  scale_x_continuous(labels = scales::number_format(accuracy = 1)) + 
+  theme_minimal()
+
+# Test some proportions of categorical variables between
+# whole dataset
+prop.table(table(jobs$work_type))
+# training data 
+prop.table(table(train$work_type))
+# test data
+prop.table(table(test$work_type))
+# and all are about the same
+
+```
+
+### Part b 
+`3b [3pts] . Train a decision tree and interpret the main resulting if-then rules (together with their corresponding plots). Test the trained tree with your testing dataset and compare the confusion matrices obtained during training and testing: compute percentages of correctly and incorrectly classified samples and compare results in training and testing.`
+
+```{r}
+
+# read the main CSV into a dataframe
+jobs <- read.csv('job_postings.csv', header=TRUE)
+employees <- read.csv('company_details/employee_counts_clean.csv', header=TRUE)
+
+# Add the number of employees
+job_employees <- merge(jobs, employees, by.x = "company_id", by.y = "company_id", all.x = TRUE)
+
+
+# Filter for the columns we want, and remove "class_applies" unspecifieds for the purposes of prediction
+filtered_df <- job_employees  %>%
+  select(class_views, class_applies, class_salary, formatted_work_type, remote_allowed, class_employees, class_followers) %>% 
+  mutate(remote_allowed = ifelse(is.na(remote_allowed), 0, remote_allowed)) %>% 
+  filter(class_applies != "Unspecified")
+
+
+filtered_df$class_views <- as.factor(filtered_df$class_views)
+filtered_df$class_applies <- as.factor(filtered_df$class_applies)
+filtered_df$class_salary <- as.factor(filtered_df$class_salary)
+filtered_df$class_employees <- as.factor(filtered_df$class_employees)
+filtered_df$class_followers<- as.factor(filtered_df$class_followers)
+
+
+
+
+# Seed the test/train sample so we have repeatable results
+set.seed(1)
+
+# Could do this to get training/testing split
+# Randomly permute the rows of jobs
+# jobs_rand <- jobs[order(runif(nrow(jobs))),]
+# index [:N] for training, [N:] for test, where N is training prob * n of rows
+
+# I think this is more clear
+sample <- sample.split(filtered_df$formatted_work_type, SplitRatio = 0.7)
+train  <- subset(filtered_df, sample == TRUE)
+test   <- subset(filtered_df, sample == FALSE)
+
+applies_model <- C5.0(train[-2], train$class_applies)
+summary(applies_model)
+
+applies_predictions <- predict(applies_model, test)
+CrossTable(test$class_applies, applies_predictions,
+           prop.chisq = FALSE, prop.c = FALSE,
+           prop.r = FALSE, 
+           dnn = c('actual applications', 'predicted applications'))
+
+```
+
+
+### Part 3c
+
+`c [3pts]. Apply boosting with different numbers of trees and analyze the impact on the prediction results: what is the impact of the number of trees in the accuracy of the classifier?`
+
+```{r}
+
+# read the main CSV into a dataframe
+jobs <- read.csv('job_postings.csv', header=TRUE)
+employees <- read.csv('company_details/employee_counts_clean.csv', header=TRUE)
+
+# Add the number of employees
+job_employees <- merge(jobs, employees, by.x = "company_id", by.y = "company_id", all.x = TRUE)
+
+
+# Filter for the columns we want, and remove "class_applies" unspecifieds for the purposes of prediction
+filtered_df <- job_employees  %>%
+  select(class_views, class_applies, class_salary, formatted_work_type, remote_allowed, class_employees, class_followers) %>% 
+  mutate(remote_allowed = ifelse(is.na(remote_allowed), 0, remote_allowed)) %>% 
+  filter(class_applies != "Unspecified")
+
+
+filtered_df$class_views <- as.factor(filtered_df$class_views)
+filtered_df$class_applies <- as.factor(filtered_df$class_applies)
+filtered_df$class_salary <- as.factor(filtered_df$class_salary)
+filtered_df$class_employees <- as.factor(filtered_df$class_employees)
+filtered_df$class_followers<- as.factor(filtered_df$class_followers)
+
+
+# Seed the test/train sample so we have repeatable results
+set.seed(1)
+
+# Could do this to get training/testing split
+# Randomly permute the rows of jobs
+# jobs_rand <- jobs[order(runif(nrow(jobs))),]
+# index [:N] for training, [N:] for test, where N is training prob * n of rows
+
+# I think this is more clear
+sample <- sample.split(filtered_df$formatted_work_type, SplitRatio = 0.7)
+train  <- subset(filtered_df, sample == TRUE)
+test   <- subset(filtered_df, sample == FALSE)
+
+applies_model5 <- C5.0(train[-2], train$class_applies, trials = 5)
+summary(applies_model5)
+
+applies_model10 <- C5.0(train[-2], train$class_applies, trials = 10)
+summary(applies_model10)
+
+applies_model16 <- C5.0(train[-2], train$class_applies, trials = 16)
+summary(applies_model16)
+
+applies_predictions16 <- predict(applies_model16, test)
+CrossTable(test$class_applies, applies_predictions16,
+           prop.chisq = FALSE, prop.c = FALSE,
+           prop.r = FALSE, 
+           dnn = c('actual applications', 'predicted applications'))
+
+
+# plot the boost 
+
+data <- data.frame(
+  x = c(1,5,10,16),
+  y = c(27.6,27.1,26.6,26.3)
+)
+
+ggplot(data, aes(x = x, y = y)) +
+  geom_line() +
+  labs(title = "Decision Tree Boosting on Application Number Prediction", x = "Number of Decision Trees", y = "Error Rate") + 
+  theme_minimal()
+
+```
+
+
+### Question 3d
+
+`d [3pts]. Do the same analysis with bagging and random forests: train with bagging and then train with random forests using at least four different numbers of trees. Compare prediction results over the testing sets. Which are the most important features in each random forest?`
+
+
+```{r}
+##################### Bagging
+
+# read the main CSV into a dataframe
+jobs <- read.csv('job_postings.csv', header=TRUE)
+employees <- read.csv('company_details/employee_counts_clean.csv', header=TRUE)
+
+# Add the number of employees
+job_employees <- merge(jobs, employees, by.x = "company_id", by.y = "company_id", all.x = TRUE)
+
+
+# Filter for the columns we want, and remove "class_applies" unspecifieds for the purposes of prediction
+filtered_df <- job_employees  %>%
+  select(class_views, class_applies, class_salary, formatted_work_type, remote_allowed, class_employees, class_followers) %>% 
+  mutate(remote_allowed = ifelse(is.na(remote_allowed), 0, remote_allowed)) %>% 
+  filter(class_applies != "Unspecified")
+
+
+filtered_df$class_views <- as.factor(filtered_df$class_views)
+filtered_df$class_applies <- as.factor(filtered_df$class_applies)
+filtered_df$class_salary <- as.factor(filtered_df$class_salary)
+filtered_df$class_employees <- as.factor(filtered_df$class_employees)
+filtered_df$class_followers<- as.factor(filtered_df$class_followers)
+
+
+# Seed the test/train sample so we have repeatable results
+set.seed(1)
+
+
+filtered_df <- na.omit(filtered_df)
+
+# Generate 70% training sample
+train <- sample(1:nrow(filtered_df), nrow(filtered_df) * 0.7)
+
+# Train bagging model on training data (RF with all 6 other attributes)
+bag.applies <- randomForest(class_applies~., data = filtered_df, subset = train, mtry = 6, importance = TRUE)
+
+# Run the predictions using the trained model on the test data
+pred <- predict(bag.applies, filtered_df[-train,])
+pred
+ 
+
+```
+
+```{r}
+##################### Random forrest
+
+# read the main CSV into a dataframe
+jobs <- read.csv('job_postings.csv', header=TRUE)
+employees <- read.csv('company_details/employee_counts_clean.csv', header=TRUE)
+
+# Add the number of employees
+job_employees <- merge(jobs, employees, by.x = "company_id", by.y = "company_id", all.x = TRUE)
+
+
+# Filter for the columns we want, and remove "class_applies" unspecifieds for the purposes of prediction
+filtered_df <- job_employees  %>%
+  select(class_views, class_applies, class_salary, formatted_work_type, remote_allowed, class_employees, class_followers) %>% 
+  mutate(remote_allowed = ifelse(is.na(remote_allowed), 0, remote_allowed)) %>% 
+  filter(class_applies != "Unspecified")
+
+
+filtered_df$class_views <- as.factor(filtered_df$class_views)
+filtered_df$class_applies <- as.factor(filtered_df$class_applies)
+filtered_df$class_salary <- as.factor(filtered_df$class_salary)
+filtered_df$class_employees <- as.factor(filtered_df$class_employees)
+filtered_df$class_followers<- as.factor(filtered_df$class_followers)
+
+
+# Seed the test/train sample so we have repeatable results
+set.seed(1)
+
+
+filtered_df <- na.omit(filtered_df)
+
+# Generate 70% training sample
+train <- sample(1:nrow(filtered_df), nrow(filtered_df) * 0.7)
+
+# Train bagging model on training data (RF with all 6 other attributes)
+bag.applies <- randomForest(class_applies~., data = filtered_df, subset = train, mtry = 3, importance = TRUE)
+
+# Run the predictions using the trained model on the test data
+pred <- predict(bag.applies, filtered_df[-train,])
+View(pred)
+ 
+
+```
+```
+
+

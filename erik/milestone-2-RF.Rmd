@@ -1,0 +1,45 @@
+---
+title: "milestone-2-RF"
+author: "Erik Rye"
+date: "2023-10-18"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caTools)
+library(dplyr)
+```
+
+## R Markdown
+
+
+```{r}
+# Set current working directory to where my data is
+setwd('/home/erik/repos/gigaryte/INST737-Team-8/')
+# read the main CSV into a dataframe
+df <- read.csv('job_postings.csv', header=TRUE)
+
+applications <- data.frame(views = df$views, applies = df$applies)
+applications <- na.omit(applications)
+
+# Seed the test/train sample so we have repeatable results
+set.seed(0)
+
+# Do a 70/30 training/testing split
+sample <- sample.split(applications$views, SplitRatio = 0.7)
+train  <- subset(applications, sample == TRUE)
+test   <- subset(applications, sample == FALSE)
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
