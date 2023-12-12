@@ -1,0 +1,295 @@
+---
+title: "Feature Selection - Sharvil"
+author: "Sharvil"
+date: "2023-11-26"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+Question 5. Feature Selection
+Select three models from Milestones 2 or 3 (linear/logistic regression, Naïve Bayes, Decision Trees, SVM or Neural Networks) and apply three different types of feature selection: filter, wrapper or embedding, one per model. Report results focusing on improvements in performance (or lack of) due to feature selection.
+
+```{r}
+#Importing the libraries
+library(dplyr)
+library(tidyverse)
+library(MASS)
+library(ggplot2)
+```
+
+```{r}
+
+
+#Importing the data. (Please select job_postings.csv file after running the read.csv function)
+dataset <- read.csv(file.choose(), header = TRUE)
+
+#Removing Scientific notations
+options(scipen = 999)
+```
+
+
+
+#1 FS-SFS
+In Milestone 2, for Multivariate Linear Regression, we had created a model, where the Dependent variable was the number of applicants & the independent variables were the number of views, salary, the experience level, the work type & the state.
+
+The is the code for the model we used in Milestone 2. We have adjusted the variable names for convenience.
+```{r}
+attach(dataset)
+dataset_FS1 <- data.frame(applies,views,clean_salary,formatted_experience_level,formatted_work_type,state)
+
+
+#Cleaning up the data
+dataset_FS1$formatted_experience_level[dataset_FS1$formatted_experience_level==""] <- NA
+dataset_FS1$state[dataset_FS1$state==""] <- NA
+dataset_FS1$clean_salary <- as.integer(dataset_FS1$clean_salary)
+dataset_FS1  <- drop_na(dataset_FS1 )
+#There should be 2334 observations of 6 variables in dataset_FS1
+```
+
+In the code below, we carry out the Feature Selection:
+```{r}
+#Step 1: Define base intercept only model (no variables). This model does not have any features. Just intercept
+base.mod <- lm(applies ~ 1, data=dataset_FS1)
+
+#Step 2: Full model with all predictors
+all.mod <- lm(applies ~., data=dataset_FS1)
+
+#Step 3: perform step-wise algorithm. direction = Forward
+stepMod <- step(base.mod, scope=list(lower=base.mod, upper = all.mod), direction = "forward", trace = 0, steps = 1000)
+
+#step() function in R searches for the best possible model by iteratively selecting features to arrive at a model with the lowest possible AIC
+
+
+#Step 4: Get the shortlisted variable.
+shortlistedVars <- names(unlist(stepMod[[1]]))
+shortlistedVars <- shortlistedVars[!shortlistedVars %in% "(Intercept)"]
+#Remove intercept
+
+#Show
+print(shortlistedVars)
+#Basically, when we print this, whatever results we get in the console, those are actually the variables that give us the best model
+
+
+#Model
+summary(stepMod)
+summary(all.mod)
+
+```
+With forward approach, we get an Adjusted R-squared value of around 0.7581
+
+
+```{r}
+#This example is for backward approach. We start with a model with all the features.
+stepMod_backward <- step(all.mod, direction = "backward", trace = 0, steps = 1000)
+
+#Get the shortlisted variable.
+
+shortlistedVars2 <- names(unlist(stepMod_backward[[1]]))
+shortlistedVars2 <- shortlistedVars2[!shortlistedVars2 %in% "(Intercept)"]
+#Remove intercept
+
+#Show
+print(shortlistedVars2)
+#Basically, when we print this, whatever results we get in the console, those are actually the variables that give us the best model
+
+
+#Model
+summary(stepMod_backward)
+```
+Both Backward & Forward approaches produce the same shortlisted variables, and the summary of both of them gives an R-squared value of around 0.7581
+The R-squared value for the multivariate regression model was around 0.7592. With the Feature Selection method, it decreases very slightly. 
+
+
+#Neural Networks:
+This was the code which gave the best result for Neural Networks:
+
+```{r}
+
+#Loading the libraries
+library(neuralnet)
+library(sigmoid)
+#Importing the data & Creating the specific dataframe:
+jobs <- read.csv('job_postings.csv', header=TRUE)
+employees <- read.csv('employee_counts_clean.csv', header=TRUE)
+# Combine the two csvs on company_id
+job_employees <- merge(jobs, employees, by.x = "company_id", by.y = "company_id", all.x = TRUE)
+# Creating a data frame out of just the dependent variables
+df <- data.frame(views=job_employees$views, 
+                   salary=job_employees$clean_salary,
+                   employees=job_employees$employee_count, 
+                   followers=job_employees$follower_count, applies=job_employees$applies 
+                 )
+library(tidyverse)
+df <- drop_na(df)
+
+#Normalizing the continuous variables
+normalize <- function(x) {
+  return((x-min(x))/(max(x) - min(x)))
+}
+#Using lapply function to apply function to whole data frame
+normalized_data <- as.data.frame(lapply(df,normalize))
+
+#Creating the Training & Testing Datasets
+applicants_train <- normalized_data[1:2500,]
+applicants_test <- normalized_data[2501:3251,]
+set.seed(123)
+
+#Code for best Neural Network Model
+applicants_model_main <- neuralnet(formula = applies ~ views + salary + employees + followers, data = applicants_train, hidden = c(3,3,2,2))
+
+#Plotting the Neural Network Model
+plot(applicants_model_main)
+
+#Predicting, using the testing dataset
+model_main_results <- neuralnet::compute(applicants_model_main, applicants_test[1:4])
+predicted_applicants_model_main <- model_main_results$net.result
+cor(predicted_applicants_model_main,applicants_test$applies)
+```
+The Pearson correlation Cofficient value should be around 0.9 or 0.89
+
+
+Now, creating the cor plot
+
+```{r}
+corr_variables <- cor(applicants_train)
+
+#Building correplot to visualize the correlation matrix. Show numbers (not colors);
+#Legend value range
+library(corrplot)
+corrplot(cor(applicants_train), method="number", is.corr = FALSE)
+
+```
+As we can see from the plot, only views variable has a strong correlation with the applies column. We can eliminate all the other ones. (salary, employees,and followers)
+
+
+Let's create the Neural Network model using only the views columns.
+```{r}
+
+library(neuralnet)
+#Only using views column as the IV
+
+model2 = update(applicants_model_main, ~.-salary-employees-followers)
+#Plotting the Neural Network Model
+plot(model2)
+model2_main_results <- neuralnet::compute(model2, applicants_test[1])
+#applicants_test[1] because the 1st column in the dataframe is 'views' column.
+predicted_applicants_model_main <- model2_main_results$net.result
+cor(predicted_applicants_model_main,applicants_test$applies)
+```
+
+The correlation Coefficient value comes around 0.89, or sometimes 0.88
+
+The code below is for the neural network model, with feature selection, WITHOUT any hidden layers or nodes:
+```{r}
+applicants_model_main_2 <- neuralnet(formula = applies ~ views + salary + employees + followers, data = applicants_train)
+model3 = update(applicants_model_main_2, ~.-salary-employees-followers)
+#Plotting the Neural Network Model
+plot(model3)
+model3_main_results <- neuralnet::compute(model3, applicants_test[1])
+#applicants_test[1] because the 1st column in the dataframe is 'views' column.
+predicted_applicants_model_main_2 <- model3_main_results$net.result
+cor(predicted_applicants_model_main_2,applicants_test$applies)
+```
+
+The correlation coefficient value even without any hidden layers or nodes, is more or less the same in this case too.
+
+
+
+
+#3. Decision Trees
+
+
+```{r}
+#Importing the Libraries
+library(caTools)
+library(C50)
+library(gmodels)
+library(tidyverse)
+
+# Add the number of employees
+job_employees <- merge(jobs, employees, by.x = "company_id", by.y = "company_id", all.x = TRUE)
+
+
+# Filter for the columns we want, and remove "class_applies" unspecifieds for
+# the purposes of prediction
+filtered_df <- job_employees  %>%
+      dplyr::select(class_views, class_applies, class_salary, formatted_work_type, remote_allowed, class_employees, class_followers) %>% 
+        mutate(remote_allowed = ifelse(is.na(remote_allowed), 0, remote_allowed)) %>% 
+          filter(class_applies != "Unspecified")
+
+
+      filtered_df$class_views <- as.factor(filtered_df$class_views)
+      filtered_df$class_applies <- as.factor(filtered_df$class_applies)
+      filtered_df$class_salary <- as.factor(filtered_df$class_salary)
+      filtered_df$class_employees <- as.factor(filtered_df$class_employees)
+      filtered_df$class_followers<- as.factor(filtered_df$class_followers)
+      filtered_df <- drop_na(filtered_df)
+      # Seed the test/train sample so we have repeatable results
+      set.seed(1)
+
+     
+     
+      sample <- sample.split(filtered_df$formatted_work_type, SplitRatio = 0.7)
+      train  <- subset(filtered_df, sample == TRUE)
+      test   <- subset(filtered_df, sample == FALSE)
+
+      applies_model <- C5.0(train[-2], train$class_applies)
+      summary(applies_model)
+
+      applies_predictions <- predict(applies_model, test)
+              CrossTable(test$class_applies, applies_predictions,
+                 prop.chisq = FALSE, prop.c = FALSE,
+                 prop.r = FALSE,
+                 dnn = c('actual applications', 'predicted applications'))
+      
+      
+
+```
+
+
+Now, we will create the confusion matrix:
+```{r}
+library(caret)
+confusionMatrix(test$class_applies, applies_predictions, mode="everything")
+#The Accuracy value should come around 0.72 or 0.73 when running the above code
+
+```
+
+
+Now, we will use Random Forest Feature Selection Embedded Method:
+
+```{r}
+library(randomForest)
+#Creating the Random Forest Model:
+random_forest_model <- randomForest(class_applies ~ ., data = train)
+
+#Getting the value of measures for the most important variables
+importance(random_forest_model)
+
+```
+The MeanDecreaseGini value of class_views is significantly higher compared to other variables. Hence, all other variables are discarded.
+
+```{r}
+#Creating new decision tree model, with only the class_views as the predictor
+
+      applies_model_2 <- C5.0(train[1], train$class_applies)
+      summary(applies_model_2)
+
+      #Predicting the values in the testing dataset
+      applies_predictions_2 <- predict(applies_model_2, test)
+      
+      #Creating the CrossTable
+              CrossTable(test$class_applies, applies_predictions_2,
+                 prop.chisq = FALSE, prop.c = FALSE,
+                 prop.r = FALSE,
+                 dnn = c('actual applications', 'predicted applications'))
+              
+#Getting the Overall Statistics value              
+confusionMatrix(test$class_applies, applies_predictions_2, mode="everything")
+```
+The accuracy value after Feature Selection should be around 0.702.

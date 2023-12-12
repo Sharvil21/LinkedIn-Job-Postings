@@ -1,0 +1,142 @@
+---
+title: "Code for Milestone 1"
+author: "Sharvil"
+date: "2023-09-25"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+It is important have to import all the important libraries that are required to run the code without any issues. We import dplyr, ggplot2 and tidyverse libraries.
+
+```{r}
+#Importing libraries dplyr, ggplot2 and tidyverse
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+```
+
+To import the datafiles, we use the file.choose() method. One thing to note here is that we haven't specified a working directory for this part of code since it gets a bit complicated on which file path to exactly specify as we have also uploaded our code on a github repository. So, the file.choose() method is used so as to conveniently and directly choose the data files.
+
+```{r}
+#Importing the data files -> Job postings.csv and Company_industries.csv
+
+#Choose job_postings.csv
+dataframe1 <- read.csv(file.choose())
+#Choose company_industries.csv
+dataframe2 <- read.csv(file.choose())
+#Removing Duplicates:
+dataframe2 <- unique(dataframe2)
+```
+
+
+
+Our data set includes a CSV called `company_industries.csv` in the `company_details/`  that contains a mapping between `company_id`, which is the primary key for each company, and the industry that company is a part of. We can merge the two files by using the merge() function.
+
+```{r}
+#To join the tables:
+joined_table <- merge(dataframe1, dataframe2, by = "company_id")
+```
+
+
+#Number of Applicants
+
+The ‘applies’ column in the job_postings.csv file provides the data of the number of applicants for each job posting. There are more than 150,000 total applicants. Mean number of applicants is 23.04 and max value is 1615.
+We can observe that the Staffing & Recruiting Industry had the most number of applicants close to around 45000, followed by Information Technology & Services. However, there is a significant decline in the number of applicants for the subsequent industries. The coding part is as follows:
+
+```{r}
+#Number of applicants
+df1 <- subset(joined_table, select = c(applies, industry))
+
+#summary statistics of applies column
+summary(df1$applies)
+#Creating a bar plot for Applicants
+agg <- aggregate(df1$applies, by = list(df1$industry), FUN = sum)
+#Change Column Names
+colnames(agg) <- c("Industry","Applicants")
+top_10_rows <- top_n(agg, 10) %>% arrange(desc(Applicants))
+ggplot(top_10_rows, aes(x=Applicants, y= reorder(Industry, Applicants))) + geom_bar(stat="identity") + labs(title = "Top 10 Industries by Total Number of Applicants", x= "Number of Applicants" ,y = "Industry")
+```
+
+summary(df1$applies) provides us with the general statistics summary of the 'applies' column. We also want to provide an overview of which industry has the highest number of applicants just as a representation. This can be done by using the aggregate function to group by the specific industry and sum up all the number of applicants for the respective job posting for that specific industry. We then use ggplot to create a horizontal bar chart to depict our visualization.
+
+
+## Salaries data
+Next, we turn to Salaries in our dataset. There are 3 different columns that represent salary viz min_salary, med_salary and max_salary. For now, we will calculate the general statistics for min_salary and max_salary columns only.
+
+```{r}
+summary(dataframe1$max_salary)
+summary(dataframe1$min_salary)
+```
+
+Next, we calculate the general statistics for the two salary columns by filtering it out for different pay periods. Pay periods are represented by the pay_period column in our dataset. We use the filter() function from the dplyr library to separate salaries for HOURLY and YEARLY pay periods.
+
+
+```{r}
+#Summary Statistics for min_salary and max_salary for hourly pay period
+hourly_salaries <- filter(dataframe1, pay_period == "HOURLY")
+summary(hourly_salaries$max_salary)
+summary(hourly_salaries$min_salary)
+
+
+#Summary Statistics for min_salary and max_salary for yearly pay period
+yearly_salaries <- filter(dataframe1, pay_period == "YEARLY")
+summary(yearly_salaries$max_salary)
+summary(yearly_salaries$min_salary)
+```
+
+Now, to provide a visual overview of max_salary by different industries,
+
+```{r}
+#Max Salaries by Industries
+df2 <- subset(joined_table, select = c(max_salary, industry))
+
+#Creating the bar plot for max_salaries
+agg2 <- aggregate(df2$max_salary, by=list(df2$industry), FUN = max, na.rm = T);
+format(agg2, scientific = F)
+options(scipen = 999)
+top_max_salaries <- top_n(agg2, 10)
+ggplot(top_max_salaries, aes(x = x, y = reorder(Group.1,x))) + geom_bar(stat = "identity") + geom_text(aes(label = x), hjust = 1.5, color = "white") + labs(title = "Top 10 Max Salaries by Industries", x = "Max Salary", y = "Industry") + theme(axis.text = element_text(size = 15));
+```
+
+We first create a separate dataframe by using the subset function and select only max_salary and industry columns for our convenience. Then, we use the aggregate function to group by the different industries and select the maximum salary for each. We also specify na.rm = T so that all the NA values would be ignored. We use the top_n function to get the top 10 rows with the highest salaries. The format and options functions are also used so as to remove the scientific notation in the corresponding bar plot. The data is then plotted using ggplot. 
+
+
+Now, similarly to max_salary, we perform the same steps for min_salary column
+```{r}
+
+#Top 10 Min Salaries by Industries
+df3 <- subset(joined_table, select = c(min_salary, industry))
+
+#Creating the bar plot
+agg3 <- aggregate(df3$min_salary, by = list(df3$industry), FUN = max, na.rm = T)
+format(agg3, scientific = F)
+top_min_salary <- top_n(agg3, 10)
+ggplot(top_min_salary, aes(x=x, y = reorder(Group.1,x))) + geom_bar(stat="identity") + labs(x="Min Salary", y = "Industry", title = "Top 10 Min Salaries by Industries") + geom_text(aes(label = x), hjust = 1.5, color="white") + theme(axis.text = element_text(size = 15));
+
+```
+
+## Views
+We then turn our attention to the number of times a job posting was viewed. This is provided by the column “views” in our dataset. We calculate the summary statistics, and create a similar bar plot as we did before
+
+```{r}
+
+#Views column
+df4 <- subset(joined_table, select = c(industry, views), na.rm = T)
+#Summary Statistics of views column
+summary(df4$views)
+#Creating the bar plot
+agg4 <- aggregate(df4$views, by = list(df4$industry), FUN = sum,na.rm = T)
+format(agg4, scientific = F)
+top_views <- top_n(agg4, 10)
+ggplot(top_views, aes(x = x, y = reorder(Group.1,x))) + geom_bar(stat="identity") + labs(title = "Top 10 Total number of views for job postings by Industry", x = "Number of Views", y = "Industry") + theme(axis.title = element_text(size = 15),axis.text = element_text(size = 15),text = element_text(size = 15)) + geom_text(aes(label = x), hjust = 1.5, color="white")
+
+```
+
+
+
+```

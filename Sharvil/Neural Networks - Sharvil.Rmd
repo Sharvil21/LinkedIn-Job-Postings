@@ -1,0 +1,288 @@
+---
+title: "Neural Networks"
+author: "Sharvil"
+date: "2023-11-22"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Question 2. Neural Networks
+
+In this question, you will explore the applicability of Neural Networks to your research question(s). Remember to normalize the input variables to [0-1] ranges.
+
+You are expected to do an exhaustive evaluation of the NN prediction results for different hidden layers and report: (1) performance results, (2) activation function and (3) number of neurons per layer for each case. Also, plot the best neural network model.
+
+
+
+```{r}
+#Installing the required libraries:
+
+#Loading the libraries
+library(neuralnet)
+library(sigmoid)
+
+
+#Importing the data & Creating the specific dataframe:
+#Please import job_postings.cvs and employee_counts_clean.csv files. If the code below doesn't work, please use file.choose() method to import the data.
+jobs <- read.csv('job_postings.csv', header=TRUE)
+employees <- read.csv('employee_counts_clean.csv', header=TRUE)
+
+# Combine the two csvs on company_id
+job_employees <- merge(jobs, employees, by.x = "company_id", by.y = "company_id", all.x = TRUE)
+
+# Creating a data frame out of just the dependent variables
+df <- data.frame(views=job_employees$views, 
+                   salary=job_employees$clean_salary,
+                   employees=job_employees$employee_count, 
+                   followers=job_employees$follower_count, applies=job_employees$applies 
+                 )
+
+```
+
+There are a lot of NA values in the columns. So, we will drop them, otherwise it causes issues in the neural network model
+
+```{r}
+#Loading tidyverse library
+library(tidyverse)
+
+#Dropping the rows with NA values
+df <- drop_na(df)
+```
+
+
+
+
+Next, we will create a function to normalize the values and apply it to the entire data frame we created just now.
+
+```{r}
+#Normalizing the data
+normalize <- function(x) {
+  return((x-min(x))/(max(x) - min(x)))
+}
+```
+
+
+Now we will apply the normalization function to the entire data frame.
+
+```{r}
+#Using lapply function to apply function to whole data frame
+normalized_data <- as.data.frame(lapply(df,normalize))
+```
+
+Research Question: Predicting the number of Applicants for the Linkedin job posting, based on the number of views, salary, number of followers and employees working at that company.
+
+
+```{r}
+#Removing scientific notation first
+options(scipen = 999)
+
+
+#Creating the training & Testing data sets
+applicants_train <- normalized_data[1:2500,]
+applicants_test <- normalized_data[2501:3251,]
+
+```
+
+Carrying out the Neural Network Test:
+
+```{r}
+#loading library
+library(neuralnet)
+#Loading caTools library
+library(caTools)
+#Using neuralnet
+set.seed(123)
+applicants_model_1 <- neuralnet(formula = applies ~ views + salary + employees + followers, data = applicants_train)
+
+#Plotting the Neural Network Model
+plot(applicants_model_1)
+
+```
+
+Now, we will predict the number of applicants, on the testing dataset
+```{r}
+#Relocating the 
+
+
+#Here, preferably use neuralnet::compute, instead of directly using compute() function.
+#Since several libraries have already been loaded, they also contain the compute() function and would give an error.
+#Hence, the neuralnet::compute() function is a much better alternative
+model_1_results <- neuralnet::compute(applicants_model_1, applicants_test[1:4])
+
+#applicants_test[1:4] because 5th column is the applies column. We want to exclude it
+
+model_1_results$neurons
+model_1_results$net.result
+
+```
+
+
+Next, we will examine the correlation between the predicted & the actual values:
+
+```{r}
+predicted_applicants_model_1 <- model_1_results$net.result
+
+cor(predicted_applicants_model_1,applicants_test$applies)
+
+```
+
+We get a value of around 0.8938811
+
+The code below considers only 1 variable, 'views'. Which was our original research question, i.e predicting the number of applicants based on the number of views a job posting has
+```{r}
+#4 hidden layers,
+set.seed(123)
+applicants_model_10 <- neuralnet(formula = applies ~ views, data = applicants_train )
+
+#Plotting the Neural Network Model
+plot(applicants_model_10)
+model_10_results <- neuralnet::compute(applicants_model_10, applicants_test[1])
+
+predicted_applicants_model_10 <- model_10_results$net.result
+cor(predicted_applicants_model_10,applicants_test$applies)
+```
+The correlation coefficient is still around 0.89.
+
+
+
+This is the code for the BEST Neural Network Model:
+```{r}
+# 4 hidden layers, 3 nodes in first & second layer, 2 nodes in third & fourth Layer
+set.seed(123)
+applicants_model_main <- neuralnet(formula = applies ~ views + salary + employees + followers, data = applicants_train, hidden = c(3,3,2,2))
+
+#Plotting the Neural Network Model
+plot(applicants_model_main)
+model_main_results <- neuralnet::compute(applicants_model_main, applicants_test[1:4])
+
+predicted_applicants_model_main <- model_main_results$net.result
+cor(predicted_applicants_model_main,applicants_test$applies)
+```
+
+This model gives us a correlation coefficient value of around 0.9128009
+Only this model is of relevance to the project
+
+plot(applicants_model_main)
+
+The above model was obtained after going through several different iterations, with different permutations & combinations of hidden layers and nodes, and also different activation functions. Here are some of the examples, just for reference (No need to run code below this as it'll mostly be redundant):
+
+```{r}
+#3 hidden layers, 5 nodes in first, 3 nodes in second, 2 nodes in third
+applicants_model_2 <- neuralnet(formula = applies ~ views + salary + employees + followers, data = applicants_train, hidden = c(5,3,2))
+
+#Plotting the Neural Network Model
+plot(applicants_model_2)
+model_2_results <- neuralnet::compute(applicants_model_2, applicants_test[1:4])
+
+predicted_applicants_model_2 <- model_2_results$net.result
+cor(predicted_applicants_model_2,applicants_test$applies)
+```
+As we can observe, the performance of this model seems to be have worsened slightly. correlation coefficient value is around 0.88
+
+
+```{r}
+#Using Sigmoid Activation Function, 3 hidden layers, 5 nodes in first, 3 nodes in second, 2 nodes in third
+
+applicants_model_3 <- neuralnet(formula = applies ~ views + salary + employees + followers, data = applicants_train, hidden = c(5,3,2), act.fct = "logistic" )
+
+#Plotting the Neural Network Model
+plot(applicants_model_3)
+model_3_results <- neuralnet::compute(applicants_model_3, applicants_test[1:4])
+
+predicted_applicants_model_3 <- model_3_results$net.result
+cor(predicted_applicants_model_3,applicants_test$applies)
+```
+As we can observe, the performance of this model seems to improve very slightly. It would also depend on the iteration of this code being computed. At first, it can show a value near to 0.88, but then after repeatedly running, the correlation coefficient value comes out around 0.9. It even went to 0.83, but only in one case.
+
+
+Now, we will use different layers
+
+```{r}
+# 3 hidden layers
+set.seed(123)
+applicants_model_4 <- neuralnet(formula = applies ~ views + salary + employees + followers, data = applicants_train, hidden = 3 )
+
+#Plotting the Neural Network Model
+plot(applicants_model_4)
+model_4_results <- neuralnet::compute(applicants_model_4, applicants_test[1:4])
+
+predicted_applicants_model_4 <- model_4_results$net.result
+cor(predicted_applicants_model_4,applicants_test$applies)
+```
+The performance of this model seems to have improved very slightly.
+
+
+```{r}
+#2 hidden layers, 2 nodes in each
+set.seed(123)
+applicants_model_5 <- neuralnet(formula = applies ~ views + salary + employees + followers, data = applicants_train, hidden = c(2,2) )
+
+#Plotting the Neural Network Model
+model_5_results <- neuralnet::compute(applicants_model_5, applicants_test[1:4])
+
+predicted_applicants_model_5 <- model_5_results$net.result
+cor(predicted_applicants_model_5,applicants_test$applies)
+```
+
+The performance of this Neural Network Model, also improved very slightly, with the correlation coefficient near to 0.9
+
+```{r}
+#2 hidden layers
+set.seed(123)
+applicants_model_6 <- neuralnet(formula = applies ~ views + salary + employees + followers, data = applicants_train, hidden = 2 )
+
+#Plotting the Neural Network Model
+plot(applicants_model_6)
+model_6_results <- neuralnet::compute(applicants_model_6, applicants_test[1:4])
+
+predicted_applicants_model_6 <- model_6_results$net.result
+cor(predicted_applicants_model_6,applicants_test$applies)
+```
+The performance of this models seem to have improved, with the correlation coefficient around 0.91
+
+```{r}
+#2 hidden layers, relu function
+set.seed(123)
+applicants_model_7 <- neuralnet(formula = applies ~ views + salary + employees + followers, data = applicants_train, hidden = 2, act.fct = relu, stepmax = 1e7 )
+
+#Plotting the Neural Network Model
+plot(applicants_model_7)
+model_7_results <- neuralnet::compute(applicants_model_7, applicants_test[1:4])
+
+predicted_applicants_model_7 <- model_7_results$net.result
+cor(predicted_applicants_model_7,applicants_test$applies)
+```
+
+
+```{r}
+#4 hidden layers,
+set.seed(123)
+applicants_model_8 <- neuralnet(formula = applies ~ views + salary + employees + followers, data = applicants_train, hidden = 4, stepmax = 1e7 )
+
+#Plotting the Neural Network Model
+plot(applicants_model_8)
+model_8_results <- neuralnet::compute(applicants_model_8, applicants_test[1:4])
+
+predicted_applicants_model_8 <- model_8_results$net.result
+cor(predicted_applicants_model_8,applicants_test$applies)
+```
+The performance for the model with 4 hidden layers is slghtly improved. Correlation coefficient comes to around 0.907.
+
+
+```{r}
+#4 hidden layers,
+set.seed(123)
+applicants_model_9 <- neuralnet(formula = applies ~ views + salary + employees + followers, data = applicants_train, hidden = c(4,3,2,2), stepmax = 1e7, act.fct = relu )
+
+#Plotting the Neural Network Model
+plot(applicants_model_9)
+model_9_results <- neuralnet::compute(applicants_model_9, applicants_test[1:4])
+
+predicted_applicants_model_9 <- model_9_results$net.result
+cor(predicted_applicants_model_9,applicants_test$applies)
+```
+
+
